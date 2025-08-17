@@ -1,0 +1,155 @@
+dir fetch_player_name {
+    function on_load minecraft:load {
+        data remove storage yopo:fetch_player_name playerName
+        data remove storage yopo:fetch_player_name isOffline
+        kill @e[tag=yopo.fetch_player_name]
+        execute as @a[limit=1] at @s run {
+            data modify storage yopo:fetch_player_name UUID set from entity @s UUID
+            block { with storage yopo:fetch_player_name
+                $summon minecraft:armor_stand ~ ~100 ~ {equipment:{head:{id:"player_head",Count:1b,components:{profile:{id:$(UUID)}}}},Invisible:1b,NoGravity:1b,Tags:["yopo.fetch_player_name"],Marker:1b}
+            }
+        }
+    }
+
+    function on_tick minecraft:tick {
+        execute unless data storage yopo:fetch_player_name playerName run {
+            execute if data entity @e[tag=yopo.fetch_player_name,limit=1] equipment.head.components.minecraft:profile.name run {
+                data modify storage yopo:fetch_player_name playerName set from entity @e[tag=yopo.fetch_player_name,limit=1,sort=nearest] equipment.head.components.minecraft:profile.name
+                execute if data storage yopo:fetch_player_name {player:""} run data modify storage yopo:fetch_player_name isOffline set value true
+                kill @e[tag=yopo.fetch_player_name]
+            }
+        }
+    }
+}
+
+function generate_id {
+    execute store result score #id yopo run random value 10000..99999
+    scoreboard players operation #temp yopo = #id yopo
+    scoreboard players operation #temp yopo %= #2 yopo
+    execute if score #temp yopo matches 0 run {
+        function ^1
+    } else run {
+        execute store result storage yopo:yopo id int 1 run scoreboard players get #id yopo
+    }
+}
+
+function on_load minecraft:load {
+    scoreboard objectives add yopo dummy
+
+    scoreboard players set #1 yopo 1
+    scoreboard players set #2 yopo 2
+
+    data modify storage yopo:yopo e set value [5537, 6]
+    data modify storage yopo:yopo n set value [3761, 9429, 1900, 4325, 1686]
+
+    data modify storage yopo:yopo encrypting set value false
+    data modify storage yopo:yopo get_input set value false
+    data modify storage yopo:yopo verify_input set value false
+
+    function *generate_id
+}
+
+function on_tick minecraft:tick {
+    execute if data storage yopo:yopo {encrypting:true} run {
+        execute if data storage bigint:tmp {abs_mod_pow_done:true} run {
+            tellraw @a "加密完成"
+            data modify storage yopo:yopo encrypting set value false
+            
+            data modify storage bigint:tmp digits set from storage bigint:tmp c_digits
+            function bigint:to_str
+
+            block { with storage bigint:tmp
+                $tellraw @a {text:"点击此处打开验证网页!",underlined:true,color:blue,click_event:{action: open_url,url:"https://yopo.jawbts.org?verify=$(str)"}}
+            }
+
+            tellraw @a ""
+            tellraw @a "请复制网页给你展示的结果到书中"
+            tellraw @a "请直接复制, 不要一个一个字符手动输入!"
+            tellraw @a "不要著名!"
+
+            give @a writable_book
+
+            data remove storage yopo:yopo input
+
+            data modify storage yopo:yopo get_input set value true
+        }
+    }
+
+    execute if data storage yopo:yopo {get_input:true} run {
+        data modify storage yopo:yopo input set from entity @a[limit=1] Inventory[0].components.minecraft:writable_book_content.pages[0].raw
+        execute if data storage yopo:yopo input run {
+            data modify storage yopo:yopo get_input set value false
+
+            scoreboard players set #sig yopo 0
+
+            block { with storage yopo:yopo
+                $data modify storage yopo:yopo input_p set value $(input)
+                scoreboard players set #sig yopo 1
+            }
+
+            clear @a
+
+            execute if score #sig yopo matches 0 run {
+                tellraw @a "输入错误, 请重新点击按钮!"
+            } else run {
+                tellraw @a "正在验证... 卡顿是正常的..."
+
+                data modify storage bigint:tmp a_digits set from storage yopo:yopo input_p
+                data modify storage bigint:tmp b_digits set from storage yopo:yopo e
+                data modify storage bigint:tmp m_digits set from storage yopo:yopo n
+
+                data modify storage yopo:yopo verify_input set value true
+
+                function bigint:abs_mod_pow
+            }
+        }
+    }
+
+    execute if data storage yopo:yopo {verify_input:true} run {
+        execute if data storage bigint:tmp {abs_mod_pow_done:true} run {
+            data modify storage yopo:yopo verify_input set value false
+
+            tellraw @a "验证完毕!"
+
+            data modify storage bigint:tmp digits set from storage bigint:tmp c_digits
+            function bigint:to_str
+
+            data modify storage yopo:yopo decrypted_message set from storage bigint:tmp str
+
+            execute store result score #id yopo run data get storage yopo:yopo id
+            scoreboard players operation #id yopo += #1 yopo
+            execute store result storage bigint:tmp int_num int 1 run scoreboard players get #id yopo
+            function bigint:from_int
+            function bigint:to_str
+
+            data modify storage yopo:yopo id_p1 set from storage bigint:tmp str
+
+            block { with storage yopo:yopo
+                $execute if data storage yopo:yopo {decrypted_message:"$(id_p1)"} run {
+                    tellraw @a "解密成功! 你被允许进入!"
+                } else run {
+                    tellraw @a "解密失败! 你被禁止进入!"
+                }
+            }
+        }
+    }
+}
+
+function encrypt_message {
+    clear @a
+
+    tellraw @a "请等待...正在加密消息..."
+    tellraw @a "卡顿是正常的..."
+    tellraw @a "加密过程可能需要几分钟..."
+
+    data modify storage yopo:yopo encrypting set value true
+
+    data modify storage bigint:tmp int_num set from storage yopo:yopo id
+    function bigint:from_int
+    data modify storage bigint:tmp a_digits set from storage bigint:tmp digits
+
+    data modify storage bigint:tmp b_digits set from storage yopo:yopo e
+    data modify storage bigint:tmp m_digits set from storage yopo:yopo n
+
+    function bigint:abs_mod_pow
+}

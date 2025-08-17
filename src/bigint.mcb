@@ -1,0 +1,816 @@
+# number example:
+# [1, 2, 3]
+# which means, 1 + 2 * 10 ^ 4 + 3 * 10 ^ 8
+
+function on_load minecraft:load {
+    scoreboard objectives add bigint dummy
+    scoreboard players set #10000 bigint 10000
+    scoreboard players set #0 bigint 0
+    scoreboard players set #1 bigint 1
+    scoreboard players set #2 bigint 2
+    scoreboard players set #n1 bigint -1
+
+    gamerule maxCommandChainLength 200000000
+}
+
+
+# tmp example:
+# int_num: 12345
+
+# result:
+# digits: [2345, 1]
+
+function from_int {
+    block { with storage bigint:tmp
+        $scoreboard players set #int bigint $(int_num)
+    }
+
+    # convert int to array of digits
+    data modify storage bigint:tmp digits set value []
+
+    block {
+        execute if score #int bigint > #0 bigint run {
+        scoreboard players operation #temp bigint = #int bigint
+            scoreboard players operation #temp bigint %= #10000 bigint
+
+            execute store result storage bigint:tmp temp long 1 run scoreboard players get #temp bigint
+            block { with storage bigint:tmp
+                $data modify storage bigint:tmp digits append value $(temp)L
+            }
+
+            scoreboard players operation #int bigint /= #10000 bigint
+
+            function ^1
+        }
+    }
+}
+
+
+# tmp example:
+# array: [1, 2, 3]
+
+# result:
+# length: 3
+
+function get_array_length {
+    block { with storage bigint:tmp
+        data modify storage bigint:tmp length set value 0L
+
+        block { with storage bigint:tmp
+            $execute if data storage bigint:tmp array[$(length)] run { with storage bigint:tmp
+                execute store result score #l bigint run data get storage bigint:tmp length
+                scoreboard players add #l bigint 1
+                execute store result storage bigint:tmp length long 1 run scoreboard players get #l bigint
+                function ^1 with storage bigint:tmp
+            }
+        }
+    }
+}
+
+
+# temp example:
+# digits: [0, 0, 3, 0]
+
+# result:
+# str: "0L0L3L0L"
+
+function to_str {
+    data modify storage bigint:tmp str set value ""
+    scoreboard players set #l bigint 0
+
+    block {
+        execute store result storage bigint:tmp length long 1 run scoreboard players get #l bigint
+
+        block { with storage bigint:tmp
+            $execute if data storage bigint:tmp digits[$(length)] run { with storage bigint:tmp
+                execute store result score #l bigint run data get storage bigint:tmp length
+                scoreboard players add #l bigint 1
+
+
+                $data modify storage bigint:tmp temp set from storage bigint:tmp digits[$(length)]
+                block { with storage bigint:tmp
+                    $data modify storage bigint:tmp str set value "$(str)$(temp)L"
+                }
+
+                function ^2
+            }
+        }
+    }
+}
+
+
+# tmp example:
+# digits: [0, 0, 3, 0, 0]
+# 
+# result:
+# digits: [0, 0, 3]
+
+function normalize {
+    # get array length
+    data modify storage bigint:tmp array set from storage bigint:tmp digits
+    function get_array_length
+    execute store result score #len bigint run data get storage bigint:tmp length
+    scoreboard players set #i bigint 0
+    scoreboard players set #last_non_zero_index bigint 0
+
+    # find last non-zero digit index (from 0 to len-1)
+    block {
+        execute store result storage bigint:tmp i long 1 run scoreboard players get #i bigint
+
+        execute if score #i bigint < #len bigint run { with storage bigint:tmp
+            # try to get digits[i]
+            $execute store result score #temp_digit bigint run data get storage bigint:tmp digits[$(i)]
+
+            # check if temp_digit > 0
+            execute if score #temp_digit bigint > #0 bigint run {
+                scoreboard players operation #last_non_zero_index bigint = #i bigint
+            }
+            # else: do nothing
+
+            scoreboard players add #i bigint 1
+            function ^1
+        } else run {
+            # loop end, now check if last_non_zero_index is 0
+            # we need to check whether digits[0] is also 0 -> then result is all zero
+            execute store result score #temp_val bigint run scoreboard players get #last_non_zero_index bigint
+            execute if score #temp_val bigint = #0 bigint run { with storage bigint:tmp
+                # check value of digits[0]
+                execute store result score #d0 bigint run data get storage bigint:tmp digits[0]
+                execute if score #d0 bigint = #0 bigint run {
+                    # set digits to [0]
+                    data modify storage bigint:tmp digits set value [0]
+                    # no return, just fall through
+                } else run {
+                    # digits[0] is non-zero, and it's the only one, keep it
+                    # nothing to do
+                }
+            } else run {
+                # last_non_zero_index > 0, we need to trim
+                # nothing to do here, go to trim phase
+            }
+        }
+    }
+
+    scoreboard players set #j bigint 0
+    data modify storage bigint:tmp digits_new set value []
+
+    # copy digits[0..last_non_zero_index] to digits_new
+    block {
+        execute store result storage bigint:tmp j long 1 run scoreboard players get #j bigint
+
+        execute if score #j bigint <= #last_non_zero_index bigint run { with storage bigint:tmp
+            data modify storage bigint:tmp digits_new append value 0L
+            $execute store result storage bigint:tmp digits_new[$(j)] long 1 run data get storage bigint:tmp digits[$(j)]
+            scoreboard players add #j bigint 1
+            function ^1
+        } else run {
+            # replace digits with digits_new
+            data modify storage bigint:tmp digits set from storage bigint:tmp digits_new
+        }
+    }
+}
+
+# tmp example:
+# a_digits: [1, 2, 3]
+# b_digits: [4, 5, 6]
+
+# result:
+# c_digits: [5, 7, 9]
+
+function abs_add {
+    # get length of a and b
+    data modify storage bigint:tmp array set from storage bigint:tmp a_digits
+    function get_array_length
+    execute store result score #l_a bigint run data get storage bigint:tmp length
+
+    data modify storage bigint:tmp array set from storage bigint:tmp b_digits
+    function get_array_length
+    execute store result score #l_b bigint run data get storage bigint:tmp length
+
+    # compare length
+    execute if score #l_a bigint < #l_b bigint run {
+        execute store result score #l_max bigint run scoreboard players get #l_b bigint
+    } else run {
+        execute store result score #l_max bigint run scoreboard players get #l_a bigint
+    }
+
+    scoreboard players set #carry bigint 0
+    scoreboard players set #i bigint 0
+    data modify storage bigint:tmp c_digits set value []
+    # iterate
+    block {
+        execute store result storage bigint:tmp i long 1 run scoreboard players get #i bigint
+
+        execute if score #i bigint < #l_max bigint run { with storage bigint:tmp
+            # get digit of a and b, default is 0 (mc will hadle it)
+            $execute store result score #a_digit bigint run data get storage bigint:tmp a_digits[$(i)]
+            $execute store result score #b_digit bigint run data get storage bigint:tmp b_digits[$(i)]
+            scoreboard players set #res_digit bigint 0
+
+            scoreboard players operation #res_digit bigint += #a_digit bigint
+            scoreboard players operation #res_digit bigint += #b_digit bigint
+            scoreboard players operation #res_digit bigint += #carry bigint
+
+            # update carry
+            scoreboard players operation #carry bigint = #res_digit bigint
+            scoreboard players operation #carry bigint /= #10000 bigint
+
+            # update result digit
+            scoreboard players operation #res_digit bigint %= #10000 bigint
+            data modify storage bigint:tmp c_digits append value 0L
+            $execute store result storage bigint:tmp c_digits[$(i)] long 1 run scoreboard players get #res_digit bigint
+
+            scoreboard players add #i bigint 1
+            function ^1
+        } else run {
+            execute if score #carry bigint > #0 bigint run { with storage bigint:tmp
+                data modify storage bigint:tmp c_digits append value 0L
+                $execute store result storage bigint:tmp c_digits[$(i)] long 1 run scoreboard players get #carry bigint
+            }
+
+            # normalize result
+            data modify storage bigint:tmp digits set from storage bigint:tmp c_digits
+            function *normalize
+            data modify storage bigint:tmp c_digits set from storage bigint:tmp digits
+        }
+    }
+}
+
+
+# tmp example:
+# a_digits: [3, 4, 5]
+# b_digits: [1, 2, 3]
+
+# result:
+# c_digits: [2, 2, 2]
+
+function abs_sub {
+    # get length of a and b
+    data modify storage bigint:tmp array set from storage bigint:tmp a_digits
+    function get_array_length
+    execute store result score #l_a bigint run data get storage bigint:tmp length
+
+    data modify storage bigint:tmp array set from storage bigint:tmp b_digits
+    function get_array_length
+    execute store result score #l_b bigint run data get storage bigint:tmp length
+
+    # max length is l_a (since |A| >= |B|, we assume)
+    execute store result score #l_max bigint run scoreboard players get #l_a bigint
+
+    scoreboard players set #borrow bigint 0
+    scoreboard players set #i bigint 0
+    data modify storage bigint:tmp c_digits set value []
+
+    # iterate
+    block {
+        execute store result storage bigint:tmp i long 1 run scoreboard players get #i bigint
+
+        execute if score #i bigint < #l_max bigint run { with storage bigint:tmp
+            # get digit of a and b, default is 0 (mc handles missing index as 0)
+            $execute store result score #a_digit bigint run data get storage bigint:tmp a_digits[$(i)]
+            $execute store result score #b_digit bigint run data get storage bigint:tmp b_digits[$(i)]
+            scoreboard players set #res_digit bigint 0
+
+            # compute: a_digit - b_digit - borrow
+            scoreboard players operation #res_digit bigint = #a_digit bigint
+            scoreboard players operation #res_digit bigint -= #b_digit bigint
+            scoreboard players operation #res_digit bigint -= #borrow bigint
+
+            # reset borrow
+            scoreboard players set #borrow bigint 0
+
+            # if negative, borrow from higher digit
+            execute if score #res_digit bigint < #0 bigint run {
+                scoreboard players operation #res_digit bigint += #10000 bigint
+                scoreboard players set #borrow bigint 1
+            }
+
+            # save result digit
+            data modify storage bigint:tmp c_digits append value 0L
+            $execute store result storage bigint:tmp c_digits[$(i)] long 1 run scoreboard players get #res_digit bigint
+
+            # next index
+            scoreboard players add #i bigint 1
+            function ^1
+        } else run {
+            # normalize result
+            data modify storage bigint:tmp digits set from storage bigint:tmp c_digits
+            function *normalize
+            data modify storage bigint:tmp c_digits set from storage bigint:tmp digits
+        }
+    }
+}
+
+
+# tmp example:
+# a_digits: [2, 1]   -> 2 + 1*10^4 = 10002
+# b_digits: [3, 1]   -> 3 + 1*10^4 = 10003
+
+# result:
+# c_digits: [6, 5, 1]  -> 6 + 5*10^4 + 1*10^8 = 100050006
+
+function abs_mul {
+    # get length of a_digits
+    data modify storage bigint:tmp array set from storage bigint:tmp a_digits
+    function get_array_length
+    execute store result score #len_a bigint run data get storage bigint:tmp length
+
+    # get length of b_digits
+    data modify storage bigint:tmp array set from storage bigint:tmp b_digits
+    function get_array_length
+    execute store result score #len_b bigint run data get storage bigint:tmp length
+
+    # allocate c_digits: size = len_a + len_b, initialized to 0
+    data modify storage bigint:tmp c_digits set value []
+    scoreboard players set #alloc_i bigint 0
+    scoreboard players operation #c_size bigint = #len_a bigint
+    scoreboard players operation #c_size bigint += #len_b bigint
+
+    block {
+        execute store result storage bigint:tmp alloc_i long 1 run scoreboard players get #alloc_i bigint
+        execute if score #alloc_i bigint < #c_size bigint run {
+            data modify storage bigint:tmp c_digits append value 0L
+            scoreboard players add #alloc_i bigint 1
+            function ^1
+        }
+    }
+
+    # initialize outer loop index i = 0
+    scoreboard players set #i bigint 0
+
+    # start outer loop: i from 0 to len_a - 1
+    block {
+        # store i into storage for $(i) usage
+        execute store result storage bigint:tmp i long 1 run scoreboard players get #i bigint
+
+        execute if score #i bigint < #len_a bigint run { with storage bigint:tmp
+            # load a_digits[i]
+            $execute store result score #a_val bigint run data get storage bigint:tmp a_digits[$(i)]
+            # $say i $(i)
+
+            # initialize inner loop index j = 0
+            scoreboard players set #j bigint 0
+
+            # start inner loop: j from 0 to len_b - 1
+            block {
+                # store j into storage for $(j) usage
+                execute store result storage bigint:tmp j long 1 run scoreboard players get #j bigint
+
+                execute if score #j bigint < #len_b bigint run { with storage bigint:tmp
+                    # load b_digits[j]
+                    $execute store result score #b_val bigint run data get storage bigint:tmp b_digits[$(j)]
+                    # $say j $(j)
+
+                    # compute temp = a_val * b_val
+                    scoreboard players operation #temp bigint = #a_val bigint
+                    scoreboard players operation #temp bigint *= #b_val bigint
+
+                    # compute pos = i + j
+                    scoreboard players operation #pos bigint = #i bigint
+                    scoreboard players operation #pos bigint += #j bigint
+
+                    # store pos into storage for $(pos) usage
+                    execute store result storage bigint:tmp pos long 1 run scoreboard players get #pos bigint
+                    # $say i $(i) j $(j) pos $(pos) FAKE pos! not updated!
+
+                    block { with storage bigint:tmp
+                        # $say i $(i) j $(j) pos $(pos) REAL pos! updated!
+                        # load current value at c_digits[pos]
+                        $execute store result score #current bigint run data get storage bigint:tmp c_digits[$(pos)]
+                        scoreboard players operation #current bigint += #temp bigint
+
+                        # split into digit and carry
+                        scoreboard players set #carry bigint 0
+                        scoreboard players operation #carry bigint = #current bigint
+                        scoreboard players operation #carry bigint /= #10000 bigint
+                        scoreboard players operation #current bigint %= #10000 bigint
+
+                        # save digit back to c_digits[pos]
+                        $execute store result storage bigint:tmp c_digits[$(pos)] long 1 run scoreboard players get #current bigint
+
+                        # propagate carry to higher digits
+                        scoreboard players set #k bigint 1
+
+                        # start carry propagation loop
+                        block {
+                            execute if score #carry bigint > #0 bigint run { with storage bigint:tmp
+                                # compute target_pos = pos + k
+                                scoreboard players operation #target_pos bigint = #pos bigint
+                                scoreboard players operation #target_pos bigint += #k bigint
+
+                                # store target_pos for $(target_pos)
+                                execute store result storage bigint:tmp target_pos long 1 run scoreboard players get #target_pos bigint
+
+                                block { with storage bigint:tmp
+                                    # load c_digits[target_pos]
+                                    $execute store result score #next_val bigint run data get storage bigint:tmp c_digits[$(target_pos)]
+                                    scoreboard players operation #next_val bigint += #carry bigint
+
+                                    # update carry
+                                    scoreboard players set #carry bigint 0
+                                    scoreboard players operation #carry bigint = #next_val bigint
+                                    scoreboard players operation #carry bigint /= #10000 bigint
+                                    scoreboard players operation #next_val bigint %= #10000 bigint
+
+                                    # save back to c_digits[target_pos]
+                                    $execute store result storage bigint:tmp c_digits[$(target_pos)] long 1 run scoreboard players get #next_val bigint
+                                }
+
+                                # k += 1
+                                scoreboard players add #k bigint 1
+                                function ^1
+                            }
+                        }
+                    }
+
+                    # j += 1
+                    scoreboard players add #j bigint 1
+                    function ^1
+                }
+            }
+
+            # i += 1
+            scoreboard players add #i bigint 1
+            function ^1
+        } else run {
+            # normalize result
+            data modify storage bigint:tmp digits set from storage bigint:tmp c_digits
+            function *normalize
+            data modify storage bigint:tmp c_digits set from storage bigint:tmp digits
+        }
+    }
+}
+
+
+# tmp example:
+# a_digits: [2, 1]
+# b_digits: [3, 1]
+# !! including normalization !!
+#
+# result:
+# #cmp = -1 (A<B), 0 (A=B), 1 (A>B)
+# !! it is in the bigint scoreboard objectives !!
+
+function abs_compare {
+    # get length of a_digits (normalized)
+    data modify storage bigint:tmp digits set from storage bigint:tmp a_digits
+    function *normalize
+    data modify storage bigint:tmp array set from storage bigint:tmp digits
+    function get_array_length
+    execute store result score #len_a bigint run data get storage bigint:tmp length
+
+    # get length of b_digits (normalized)
+    data modify storage bigint:tmp digits set from storage bigint:tmp b_digits
+    function *normalize
+    data modify storage bigint:tmp array set from storage bigint:tmp digits
+    function get_array_length
+    execute store result score #len_b bigint run data get storage bigint:tmp length
+
+    execute if score #len_a bigint > #len_b bigint run {
+        scoreboard players set #cmp bigint 1
+    } else execute if score #len_a bigint < #len_b bigint run {
+        scoreboard players set #cmp bigint -1
+    } else run {
+        # same length, compare from high digit to low
+        scoreboard players operation #i bigint = #len_a bigint
+        # i = len - 1
+        scoreboard players remove #i bigint 1
+        block {
+            execute store result storage bigint:tmp i long 1 run scoreboard players get #i bigint
+            execute if score #i bigint >= #0 bigint run { with storage bigint:tmp
+                $execute store result score #a_val bigint run data get storage bigint:tmp a_digits[$(i)]
+                $execute store result score #b_val bigint run data get storage bigint:tmp b_digits[$(i)]
+
+                execute if score #a_val bigint > #b_val bigint run {
+                    scoreboard players set #cmp bigint 1
+                    # break loop (do nothing)
+                } else execute if score #a_val bigint < #b_val bigint run {
+                    scoreboard players set #cmp bigint -1
+                    # break loop (do nothing)
+                } else run {
+                    scoreboard players remove #i bigint 1
+                    function ^2
+                }
+            } else run {
+                # all digits equal
+                scoreboard players set #cmp bigint 0
+            }
+        }
+    }
+}
+
+
+# tmp example:
+# a_digits: [6, 5, 1]   -> 100050006
+# b_digits: [9, 1]       -> 10009
+#
+# result:
+# c_digits: remainder of |A| / |B|
+
+function abs_mod {
+    # copy a_digits to remainder, b_digits to mod_b
+    data modify storage bigint:tmp remainder set from storage bigint:tmp a_digits
+    data modify storage bigint:tmp mod_b set from storage bigint:tmp b_digits
+
+    # compare |A| and |B|
+    function *abs_compare
+
+    execute if score #cmp bigint < #0 bigint run {
+        # |A| < |B|, result is A
+        data modify storage bigint:tmp c_digits set from storage bigint:tmp a_digits
+    } else run {
+        # |A| >= |B|, start fast mod loop
+
+        block {
+            # compare remainder and b_digits
+            data modify storage bigint:tmp a_digits set from storage bigint:tmp remainder
+            data modify storage bigint:tmp b_digits set from storage bigint:tmp mod_b
+            function *abs_compare
+
+            execute if score #cmp bigint >= #0 bigint run {
+                # remainder >= mod_b, start doubling B
+
+                # initialize candidate = B
+                data modify storage bigint:tmp candidate set from storage bigint:tmp mod_b
+
+                # DEBUG
+                # data modify storage bigint:debug candidate set from storage bigint:tmp candidate
+                # block { with storage bigint:debug
+                #     $say candidate 1 $(candidate)
+                # }
+                # DEBUG END
+
+                block {
+                    # try candidate * 2 = candidate + candidate
+                    data modify storage bigint:tmp a_digits set from storage bigint:tmp candidate
+                    data modify storage bigint:tmp b_digits set from storage bigint:tmp candidate
+                    function *abs_add
+                    # result in c_digits
+
+                    # DEBUG
+                    # data modify storage bigint:debug a_digits set from storage bigint:tmp a_digits
+                    # data modify storage bigint:debug b_digits set from storage bigint:tmp b_digits
+                    # data modify storage bigint:debug c_digits set from storage bigint:tmp c_digits
+                    # block { with storage bigint:debug
+                    #     $say a_digits $(a_digits) b_digits $(b_digits) c_digits $(c_digits)
+                    # }
+                    # DEBUG END
+
+                    # check if doubled candidate <= remainder
+                    data modify storage bigint:tmp a_digits set from storage bigint:tmp c_digits
+                    data modify storage bigint:tmp b_digits set from storage bigint:tmp remainder
+                    function *abs_compare
+
+                    execute if score #cmp bigint <= #0 bigint run {
+                        # doubled candidate <= remainder, accept it
+                        data modify storage bigint:tmp candidate set from storage bigint:tmp c_digits
+                        # DEBUG
+                        # data modify storage bigint:debug candidate set from storage bigint:tmp candidate
+                        # block { with storage bigint:debug
+                        #     $say candidate $(candidate) accepted
+                        # }
+                        # DEBUG END
+                        function ^1
+                    }
+                    # else: break double_loop, use current candidate
+                }
+
+                # DEBUG
+                # data modify storage bigint:debug candidate set from storage bigint:tmp candidate
+                # block { with storage bigint:debug
+                #     $say candidate $(candidate)
+                # }
+                # DEBUG END
+
+                # now candidate is the largest 2^k * B <= remainder
+                # subtract it from remainder
+                data modify storage bigint:tmp a_digits set from storage bigint:tmp remainder
+                data modify storage bigint:tmp b_digits set from storage bigint:tmp candidate
+                function *abs_sub
+                data modify storage bigint:tmp remainder set from storage bigint:tmp c_digits
+
+                # DEBUG
+                # data modify storage bigint:debug remainder set from storage bigint:tmp remainder
+                # block { with storage bigint:debug
+                #     $say remainder $(remainder)
+                # }
+                # DEBUG END
+
+                # loop back to mod_loop
+                function ^2
+            } else run {
+                # remainder < b_digits, final
+                data modify storage bigint:tmp c_digits set from storage bigint:tmp remainder
+
+                # normalize result
+                data modify storage bigint:tmp digits set from storage bigint:tmp c_digits
+                function *normalize
+                data modify storage bigint:tmp c_digits set from storage bigint:tmp digits
+            }
+        }
+    }
+}
+
+
+# tmp example:
+# digits: [5, 2, 1]   -> 5 + 2*10^4 + 1*10^8
+#
+# result:
+# #bit = 1 (odd), 0 (even)
+# !! it is in the bigint scoreboard objectives !!
+
+function get_lowest_bit {
+    # get first digit
+    execute store result score #d0 bigint run data get storage bigint:tmp digits[0]
+    scoreboard players operation #d0 bigint %= #2 bigint
+    execute if score #d0 bigint = #0 bigint run {
+        scoreboard players set #bit bigint 0
+    } else run {
+        scoreboard players set #bit bigint 1
+    }
+}
+
+
+# tmp example:
+# digits: [5, 2]   -> 5 + 2*10^4 = 20005
+#
+# result:
+# c_digits: [2, 1] -> 2 + 1*10^4 = 10002  (20005 // 2 = 10002)
+
+function abs_div2 {
+    data modify storage bigint:tmp c_digits set value []
+    scoreboard players set #carry bigint 0
+
+    # get length
+    data modify storage bigint:tmp array set from storage bigint:tmp digits
+    function get_array_length
+    execute store result score #len bigint run data get storage bigint:tmp length
+
+    # i = len - 1
+    scoreboard players operation #i bigint = #len bigint
+    scoreboard players remove #i bigint 1
+
+    block {
+        execute store result storage bigint:tmp i long 1 run scoreboard players get #i bigint
+        execute if score #i bigint >= #0 bigint run { with storage bigint:tmp
+            $execute store result score #digit bigint run data get storage bigint:tmp digits[$(i)]
+            # divide digit with carry: (carry*10000 + digit) / 2
+            scoreboard players operation #carry bigint *= #10000 bigint
+            scoreboard players operation #digit bigint += #carry bigint
+
+            scoreboard players set #res_digit bigint 0
+            scoreboard players operation #res_digit bigint = #digit bigint
+            scoreboard players operation #res_digit bigint /= #2 bigint
+
+            # new carry = (carry*10000 + digit) % 2
+            scoreboard players operation #carry bigint = #digit bigint
+            scoreboard players operation #carry bigint %= #2 bigint
+
+            # save result digit
+            execute store result storage bigint:tmp res_digit long 1 run scoreboard players get #res_digit bigint
+            block { with storage bigint:tmp
+                $data modify storage bigint:tmp c_digits prepend value $(res_digit)L
+                # $say prepend $(res_digit)L
+            }
+
+            scoreboard players remove #i bigint 1
+            function ^1
+        } else run {
+            # normalize result
+            data modify storage bigint:tmp digits set from storage bigint:tmp c_digits
+            function *normalize
+            data modify storage bigint:tmp c_digits set from storage bigint:tmp digits
+        }
+    }
+}
+
+
+# tmp example:
+# a_digits: [2]           -> base
+# b_digits: [3]           -> exponent
+# m_digits: [7]           -> modulus
+#
+# result:
+# c_digits: [1]           -> 2^3 mod 7 = 1
+
+function abs_mod_pow {
+    data modify storage bigint:tmp abs_mod_pow_done set value false
+
+    # initialize result = 1
+    data modify storage bigint:tmp result set value [1]
+
+    # copy base to a, exponent to b, modulus to m
+    data modify storage bigint:tmp a set from storage bigint:tmp a_digits
+    data modify storage bigint:tmp b set from storage bigint:tmp b_digits
+    data modify storage bigint:tmp m set from storage bigint:tmp m_digits
+
+    # normalize m
+    data modify storage bigint:tmp digits set from storage bigint:tmp m
+    function *normalize
+    data modify storage bigint:tmp m set from storage bigint:tmp digits
+
+    # if m == 1, return 0
+    data modify storage bigint:tmp a_digits set from storage bigint:tmp m
+    data modify storage bigint:tmp b_digits set value [1]
+    function *abs_compare
+    execute if score #cmp bigint = #0 bigint run {
+        data modify storage bigint:tmp c_digits set value [0]
+
+        data modify storage bigint:tmp abs_mod_pow_done set value true
+    } else run {
+        # main loop: while b > 0
+        block {
+            # get lowest bit of b
+            data modify storage bigint:tmp digits set from storage bigint:tmp b
+            function *get_lowest_bit
+            execute if score #bit bigint = #1 bigint run {
+                # say "b is odd"
+                # result = (result * a) % m
+                data modify storage bigint:tmp a_digits set from storage bigint:tmp result
+                data modify storage bigint:tmp b_digits set from storage bigint:tmp a
+                function *abs_mul
+                data modify storage bigint:tmp a_digits set from storage bigint:tmp c_digits
+                data modify storage bigint:tmp b_digits set from storage bigint:tmp m
+                function *abs_mod
+                data modify storage bigint:tmp result set from storage bigint:tmp c_digits
+            }
+
+            # DEBUG
+            # data modify storage bigint:debug result set from storage bigint:tmp result
+            # block { with storage bigint:debug
+            #     $say result $(result)
+            # }
+            # DEBUG END
+
+            # a = (a * a) % m
+            data modify storage bigint:tmp a_digits set from storage bigint:tmp a
+            data modify storage bigint:tmp b_digits set from storage bigint:tmp a
+            function *abs_mul
+
+            # DEBUG
+            # data modify storage bigint:debug c_digits set from storage bigint:tmp c_digits
+            # block { with storage bigint:debug
+            #     $say c_digits $(c_digits)
+            # }
+            # DEBUG END
+
+            data modify storage bigint:tmp a_digits set from storage bigint:tmp c_digits
+            data modify storage bigint:tmp b_digits set from storage bigint:tmp m
+
+            # DEBUG
+            # data modify storage bigint:debug a_digits set from storage bigint:tmp a_digits
+            # data modify storage bigint:debug b_digits set from storage bigint:tmp b_digits
+            # block { with storage bigint:debug
+            #     $say a_digits $(a_digits) b_digits $(b_digits)
+            # }
+            # DEBUG END
+
+            function *abs_mod
+            data modify storage bigint:tmp a set from storage bigint:tmp c_digits
+
+            # DEBUG
+            # data modify storage bigint:debug a set from storage bigint:tmp a
+            # block { with storage bigint:debug
+            #     $say a $(a)
+            # }
+            # DEBUG END
+
+            # b = b // 2
+            data modify storage bigint:tmp digits set from storage bigint:tmp b
+            function *abs_div2
+            data modify storage bigint:tmp b set from storage bigint:tmp c_digits
+
+            # DEBUG
+            data modify storage bigint:debug b set from storage bigint:tmp b
+            block { with storage bigint:debug
+                $say b $(b)
+            }
+            # DEBUG END
+
+            # check if b == 0
+            data modify storage bigint:tmp a_digits set from storage bigint:tmp b
+            data modify storage bigint:tmp b_digits set value [0]
+            function *abs_compare
+
+            execute if score #cmp bigint = #0 bigint run {
+                # b == 0, done
+                data modify storage bigint:tmp c_digits set from storage bigint:tmp result
+
+                data modify storage bigint:tmp abs_mod_pow_done set value true
+            } else run {
+                # b > 0, continue loop
+                # function ^1
+                schedule 10t append {
+                    function ^2
+                }
+            }
+        }
+    }
+
+    execute if data storage bigint:tmp {abs_mod_pow_done:true} run {
+        # normalize result
+        data modify storage bigint:tmp digits set from storage bigint:tmp c_digits
+        function *normalize
+        data modify storage bigint:tmp c_digits set from storage bigint:tmp digits
+    }
+}
