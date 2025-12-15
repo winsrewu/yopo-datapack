@@ -1,5 +1,6 @@
 dir fetch_player_name {
     function on_load minecraft:load {
+        scoreboard objectives add mcb.internal dummy
         data remove storage yopo:fetch_player_name playerName
         data remove storage yopo:fetch_player_name isOffline
         kill @e[tag=yopo.fetch_player_name]
