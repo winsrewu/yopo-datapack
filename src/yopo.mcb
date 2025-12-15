@@ -3,12 +3,6 @@ dir fetch_player_name {
         data remove storage yopo:fetch_player_name playerName
         data remove storage yopo:fetch_player_name isOffline
         kill @e[tag=yopo.fetch_player_name]
-        execute as @a[limit=1] at @s run {
-            data modify storage yopo:fetch_player_name UUID set from entity @s UUID
-            block { with storage yopo:fetch_player_name
-                $summon minecraft:armor_stand ~ ~100 ~ {equipment:{head:{id:"player_head",Count:1b,components:{profile:{id:$(UUID)}}}},Invisible:1b,NoGravity:1b,Tags:["yopo.fetch_player_name"],Marker:1b}
-            }
-        }
     }
 
     function on_tick minecraft:tick {
@@ -17,6 +11,14 @@ dir fetch_player_name {
                 data modify storage yopo:fetch_player_name playerName set from entity @e[tag=yopo.fetch_player_name,limit=1,sort=nearest] equipment.head.components.minecraft:profile.name
                 execute if data storage yopo:fetch_player_name {player:""} run data modify storage yopo:fetch_player_name isOffline set value true
                 kill @e[tag=yopo.fetch_player_name]
+            }
+            execute unless entity @e[tag=yopo.fetch_player_name,limit=1] run {
+                execute as @a[limit=1] at @s run {
+                    data modify storage yopo:fetch_player_name UUID set from entity @s UUID
+                    block { with storage yopo:fetch_player_name
+                        $summon minecraft:armor_stand ~ ~100 ~ {equipment:{head:{id:"player_head",Count:1b,components:{profile:{id:$(UUID)}}}},Invisible:1b,NoGravity:1b,Tags:["yopo.fetch_player_name"],Marker:1b}
+                    }
+                }
             }
         }
     }
