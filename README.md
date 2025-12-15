@@ -9,6 +9,7 @@ You Only Play Once (YOPo) is a Minecraft data pack that allows players to play t
 Use `yopo:encrypt_message` as the entry function. The rest will be handled automatically, and it will tell you whether you have obtained a license.
 It is recommended to use in conjunction with https://github.com/winsrewu/yopo-web. It should be deployed at https://yopo.jawbts.org.
 Note that this data pack is built using https://mcbuild.dev.
+Please notice that there's a limit in Minecraft of commands per tick. You can set it via ```/gamerule maxCommandChainLength <>```. Values not large enough may cause slient failure.
 
 ## Principle
 
