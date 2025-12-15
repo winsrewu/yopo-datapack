@@ -9,7 +9,10 @@ yopo(You Only Play Once)是一个Minecraft数据包，它可以让玩家在游�
 yopo:encrypt_message 是入口函数. 执行它, 其余的它会自动处理, 最后告诉你你到底那没拿到许可.  
 建议配合 https://github.com/winsrewu/yopo-web 使用. 它应该被我部署在 https://yopo.jawbts.org 上.
 注意, 这个数据包使用 https://mcbuild.dev 构建.
-请注意, Minecraft的命令限制是每tick特定次. 可以通过 ```/gamerule maxCommandChainLength <>``` 设置. 不够大的值可能会导致静默错误.
+请注意, Minecraft的命令限制是每tick特定次.
+可以通过 ```/gamerule maxCommandChainLength <>``` 和 ```/gamerule maxCommandForkCount <>``` 设置.
+不够大的值可能会导致静默错误.
+数据包自动设置的值应当可以正常运行测试样例.
 
 ## 原理
 
